@@ -1,0 +1,70 @@
+<html>
+<body>
+<script src="https://cdn.jsdelivr.net/gh/nicolaspanel/numjs@0.16.0/dist/numjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/5.10.3/math.min.js"></script>
+
+<script>
+var mass2 = function(ts, query) {
+  if (ts.ndim !== 1 || query.ndim !== 1) {
+    document.write('INVALID DIMENSIONS! MUST BE 1.')
+  }
+
+  var n = ts.shape[0];
+  var m = query.shape[0];
+  var y = query;
+  var meany = query.mean();
+  var sigmay = query.std();
+  var meanx = [];
+  var sigmax = [];
+
+  // compute rolling std and mu of x
+  for (var i = 0; i < n - m + 1; i++) {
+    var chunk = ts.slice([i, i + m]);
+    meanx.push(nj.mean(chunk));
+    sigmax.push(nj.std(chunk));
+  }
+
+  // this preprends ones or zeros respectively to comply with Matlab
+  // implementation
+  meanx = nj.concatenate(nj.ones(n - meanx.length), nj.array(meanx));
+  sigmax = nj.concatenate(nj.zeros(n - sigmax.length), nj.array(sigmax));
+  y = nj.concatenate(y.slice([null,null,-1]), nj.zeros(n - m));
+
+  var X = nj.fft(nj.concatenate(ts.reshape(n, 1), nj.zeros([n, 1])));
+  var Y = nj.fft(nj.concatenate(y.reshape(y.shape[0], 1), nj.zeros([y.shape[0], 1])));
+
+  // ndarray-fft does not handle complex
+  var Z = [];
+  for (var i = 0; i < X.shape[0]; i++) {
+    var a = math.complex(X.get(i, 0), X.get(i, 1));
+    var b = math.complex(X.get(i, 0), X.get(i, 1));
+    var c = math.multiply(a, b);
+    Z.push([c.re, c.im]);
+  }
+  var z = nj.ifft(Z);
+  
+  // convert to real
+  var newz = [];
+  for (var i = 0; i < z.shape[0]; i++) {
+    newz.push(z.get(i, 0));
+  }
+  z = newz;
+
+  var dist = [];
+  for (var i = m - 1; i < n; i++) {
+    var tmp = 2 * (m - (z[i] - m * meanx.get(i) * meany) / (sigmax.get(i) * sigmay));
+    tmp = math.sqrt(tmp);
+    dist.push(tmp);
+  }
+  
+  return dist;
+}
+
+var ts = nj.array([1, 2, 3, 4, 5, 6, 7, 8]);
+var query = nj.array([4, 5, 6, 7]);
+
+var dist = mass2(ts, query);
+document.writeln(dist);
+</script>
+</body>
+</html>
